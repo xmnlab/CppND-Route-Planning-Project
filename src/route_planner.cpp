@@ -1,10 +1,6 @@
 #include "route_planner.h"
 #include <algorithm>
 
-// debug
-#include <iostream>
-#include <csignal>
-
 RoutePlanner::RoutePlanner(RouteModel &model, float start_x, float start_y, float end_x, float end_y) : m_Model(model)
 {
     // Convert inputs to percentage:
@@ -38,21 +34,14 @@ float RoutePlanner::CalculateHValue(RouteModel::Node const *node)
 
 void RoutePlanner::AddNeighbors(RouteModel::Node *current_node)
 {
-    current_node->FindNeighbors();
-
     current_node->visited = true;
+    current_node->FindNeighbors();
 
     for (auto *node : current_node->neighbors)
     {
-        // skip if the node is already in the open list
-        if (node->visited)
-        {
-            continue;
-        }
-
         node->parent = current_node;
         node->h_value = this->CalculateHValue(node);
-        node->g_value = node->distance(*node->parent);
+        node->g_value = current_node->g_value + node->distance(*node->parent);
         node->visited = true;
         this->open_list.emplace_back(node);
     }
@@ -67,15 +56,15 @@ void RoutePlanner::AddNeighbors(RouteModel::Node *current_node)
 
 RouteModel::Node *RoutePlanner::NextNode()
 {
-    auto dist_node_comp = [](RouteModel::Node *lhs, RouteModel::Node *rhs) {
+    auto dist_node_comp = [](const RouteModel::Node *lhs, const RouteModel::Node *rhs) {
         return (lhs->h_value + lhs->g_value) > (rhs->h_value + rhs->g_value);
     };
 
     std::sort(this->open_list.begin(), this->open_list.end(), dist_node_comp);
 
-    RouteModel::Node *node = this->open_list.back();
+    RouteModel::Node *lowest_node = this->open_list.back();
     this->open_list.pop_back();
-    return node;
+    return lowest_node;
 }
 
 // TODO 6: Complete the ConstructFinalPath method to return the final path found from your A* search.
@@ -97,11 +86,8 @@ std::vector<RouteModel::Node> RoutePlanner::ConstructFinalPath(RouteModel::Node 
 
     path_found.push_back(*node);
 
-    int counter = 0;
-
     while (node->parent)
     {
-        std::cout << "[ii] ConstructFinalPath counter: " << ++counter << ", node (" << node->x << ", " << node->y << ")" << std::endl;
         this->distance += node->distance(*node->parent);
 
         node = node->parent;
@@ -127,20 +113,24 @@ void RoutePlanner::AStarSearch()
     RouteModel::Node *current_node = nullptr;
 
     // TODO: Implement your solution here.
-    current_node = this->start_node;
-    this->AddNeighbors(current_node);
+    this->open_list.push_back(this->start_node);
+    this->start_node->visited = true;
 
-    while (this->open_list.size() > 0 && current_node != this->end_node)
+    // this->AddNeighbors(current_node);
+    // this->open_list.size() > 0 &&
+    while (this->open_list.size())
     {
         current_node = this->NextNode();
+
+        if (current_node->distance(*this->end_node) == 0)
+        {
+            break;
+        }
+
         this->AddNeighbors(current_node);
     }
 
-    std::cout << "Run ConstructFinalPath (start), open_list.size(): " << this->open_list.size() << std::endl;
-
     this->m_Model.path = this->ConstructFinalPath(current_node);
-
-    std::cout << "Run ConstructFinalPath (end)" << std::endl;
 
     return;
 }
